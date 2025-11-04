@@ -2,8 +2,6 @@
 
 An AI-powered Git companion that automatically generates clear, conventional commit messages from your staged changes using Google Gemini.
 
---
-
 ## Features
 
 ✅ **Smart Commit Generation** — Creates meaningful, context-aware commit messages  
@@ -12,8 +10,6 @@ An AI-powered Git companion that automatically generates clear, conventional com
 ✅ **Secure Key Management** — Stores API keys locally in `~/.whispr/config.json`  
 ✅ **Git-Aware Intelligence** — Detects repository state and staged changes  
 ✅ **Custom Context Support** — Enhance commit suggestions with additional notes
-
---
 
 ## Installation
 
