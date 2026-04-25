@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { parseDiff } from "./diffExtractor.js";
 import { config } from 'dotenv';
 import { buildPrompt } from '../utils/genPrompts.js';
-import { getGitStatus, hasStagedChanges } from '../subsidiary/gitCheck.js';
+import { getGitStatus } from '../subsidiary/gitCheck.js';
 import { getApiKey } from '../utils/saveApiKey.js';
 
 config();
@@ -14,6 +14,68 @@ const api_key = getApiKey()
 
 const genAI = new GoogleGenerativeAI(api_key || process.env.GEMINI_API_KEY);
 
+const CONVENTIONAL_PREFIX = /^(feat|fix|refactor|chore|docs|style|perf|test)(\([^)]+\))?:\s+.+$/i;
+
+function normalizeLine(line) {
+    return line
+        .replace(/^[-*]\s+/, '')
+        .replace(/^\d+\.\s+/, '')
+        .replace(/^"|"$/g, '')
+        .replace(/^'|'$/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+export function extractCommitSuggestion(rawResponse) {
+    if (!rawResponse || !rawResponse.trim()) {
+        throw new Error('AI returned an empty commit message');
+    }
+
+    const lines = rawResponse
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+        .filter(line => !line.startsWith('```'));
+
+    if (lines.length === 0) {
+        throw new Error('AI returned an invalid commit message');
+    }
+
+    const cleanedLines = lines.map(normalizeLine).filter(Boolean);
+
+    const conventionalLine = cleanedLines.find(line => CONVENTIONAL_PREFIX.test(line));
+    const fallbackTitleLine = cleanedLines.find(
+        line => !/^Explanation\s*:/i.test(line) && !/^Description\s*:/i.test(line)
+    );
+    const titleCandidate = conventionalLine || fallbackTitleLine || cleanedLines[0];
+    const title = normalizeLine(titleCandidate);
+
+    if (!title) {
+        throw new Error('AI returned an invalid commit message title');
+    }
+
+    const descriptionLine = cleanedLines.find(
+        line => /^Description\s*:/i.test(line) || /^Explanation\s*:/i.test(line)
+    );
+
+    let description = descriptionLine
+        ? descriptionLine.replace(/^(Description|Explanation)\s*:\s*/i, '').trim()
+        : '';
+
+    if (!description) {
+        const fallbackDescriptionLine = cleanedLines.find(
+            line => line !== title && !CONVENTIONAL_PREFIX.test(line)
+        );
+        description = fallbackDescriptionLine || 'No additional description provided by AI.';
+    }
+
+    return { title, description };
+}
+
+export function extractCommitTitle(rawResponse) {
+    return extractCommitSuggestion(rawResponse).title;
+}
+
 /**
  * Generate a commit message using AI based on git diff.
  * 
@@ -24,10 +86,10 @@ const genAI = new GoogleGenerativeAI(api_key || process.env.GEMINI_API_KEY);
  * @param {string} [options.cwd] - Working directory for git commands
  * @param {string} [options.model="gemini-2.5-flash-lite"] - Gemini model to use
  * @param {string} [options.additionalContext=''] - Additional context from user to guide commit message
- * @returns {Promise<string>} Generated commit message
+ * @returns {Promise<{title: string, description: string}>} Generated commit suggestion
  * @throws {Error} If not in git repo, no changes, or AI fails
  */
-export async function generateCommitMessage(options = {}) {
+export async function generateCommitSuggestion(options = {}) {
     const {
         verbose = false,
         staged = true,
@@ -90,12 +152,13 @@ export async function generateCommitMessage(options = {}) {
         }
 
         const response = result.response.text();
+        const suggestion = extractCommitSuggestion(response);
 
         if (verbose) {
-            console.debug('Generated commit message:', response);
+            console.debug('Generated commit suggestion:', suggestion);
         }
 
-        return response;
+        return suggestion;
     } catch (error) {
         const wrappedError = new Error(
             `Failed to generate commit message: ${error.message}`,
@@ -104,6 +167,16 @@ export async function generateCommitMessage(options = {}) {
         wrappedError.originalError = error;
         throw wrappedError;
     }
+}
+
+/**
+ * Backward-compatible API that returns only the commit title.
+ * @param {Object} options - Generation options
+ * @returns {Promise<string>} Generated commit title
+ */
+export async function generateCommitMessage(options = {}) {
+    const suggestion = await generateCommitSuggestion(options);
+    return suggestion.title;
 }
 
 if (import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {

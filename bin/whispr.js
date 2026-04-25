@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import { generateCommitMessage } from '../core/genCommit.js';
+import { generateCommitSuggestion } from '../core/genCommit.js';
 import { getGitStatus } from '../subsidiary/gitCheck.js';
 import { runWhisprFlow } from '../core/whispr.js';
 import { commitChanges } from '../core/whispr.js';
@@ -73,16 +73,20 @@ program
 
                 console.log(chalk.cyan('\n🤖 Generating commit message...\n'));
 
-                const message = await generateCommitMessage({
+                const suggestion = await generateCommitSuggestion({
                     staged: true,
                     verbose: options.verbose,
                     model: options.model,
                     additionalContext: options.context || ''
                 });
+                const message = suggestion.title;
+                const description = suggestion.description;
 
                 console.log(chalk.bold.cyan('Generated Commit Message:'));
                 console.log(chalk.dim('─'.repeat(50)));
                 console.log(chalk.white(message));
+                console.log(chalk.dim('\nDescription (reference only):'));
+                console.log(chalk.dim(description));
                 console.log(chalk.dim('─'.repeat(50)) + '\n');
 
                 if (options.dryRun) {
@@ -90,8 +94,12 @@ program
                     console.log(chalk.dim('Remove --dry-run flag to commit changes'));
                 } else {
                     console.log(chalk.cyan('📝 Committing changes...'));
-                    commitChanges(message);
-                    console.log(chalk.green('✓ Changes committed successfully!\n'));
+                    const result = commitChanges(message);
+                    if (!result.success) {
+                        process.exit(1);
+                    }
+                    console.log(chalk.green('✓ Changes committed successfully!'));
+                    console.log(chalk.dim(`   Commit hash: ${chalk.cyan(result.hash)}\n`));
                 }
 
             } else {

@@ -25,7 +25,7 @@ export function stageAllFiles(cwd) {
 
 export async function stageInteractive(cwd) {
     try {
-        const output = execSync('git ls-files --others --exclude-standard', {
+        const output = execSync('git status --short', {
             encoding: 'utf-8',
             cwd: cwd || process.cwd()
         });
@@ -33,10 +33,20 @@ export async function stageInteractive(cwd) {
         const files = output
             .split('\n')
             .filter(line => line.trim())
-            .map(line => ({
-                display: line,
-                path: line
-            }));
+            .map(line => {
+                const status = line.slice(0, 2);
+                let filePath = line.slice(3).trim();
+
+                // Handle rename output like: "R  old/path -> new/path"
+                if (filePath.includes(' -> ')) {
+                    filePath = filePath.split(' -> ').pop();
+                }
+
+                return {
+                    display: `${status} ${filePath}`,
+                    path: filePath
+                };
+            });
 
         if (files.length === 0) {
             throw new Error('No files available to stage');

@@ -5,11 +5,7 @@ export function buildPrompt(diff) {
         You have just reviewed the following staged changes:
         ${diff}
 
-        Generate a SINGLE commit message following the Conventional Commit style.
-        
-        Your output should include:
-        1. The commit message — short, imperative, and lowercase prefix (feat, fix, refactor, chore, docs, style, perf, or test).
-        2. A one-paragraph explanation describing what the message means and why it fits that type, written naturally but briefly.
+        Generate exactly ONE commit title and ONE short description.
         
         Important: Generate only ONE commit message, even if there are multiple changes.
 
@@ -20,9 +16,12 @@ export function buildPrompt(diff) {
         - Use “fix” for bug or behavior corrections.
         - Use “refactor” for structural or logic improvements without behavior change.
         - Use “chore” or “style” for non-functional edits (formatting, cleanup, comments).
-        - Keep everything concise, precise, and human-like — no Markdown headings or unnecessary formatting.
+        - Keep everything concise, precise, and human-like.
+        - The first line must be a valid Conventional Commit title.
+        - The second line must start with "Description:" followed by one short sentence.
+        - Do not include bullets, quotes, markdown, or code blocks.
 
         Respond only in this format:
         feat: enhance formatDate to include time and regional formatting
-        Explanation: This introduces improved date formatting that includes time and adapts to the user's locale for better readability.`;
+        Description: Adds clear locale-aware date and time formatting for better readability.`;
 }

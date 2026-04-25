@@ -1,45 +1,42 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { config } from 'dotenv';
-import prompt from '../utils/genPrompts.js';
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-config();
+import { buildPrompt } from '../utils/genPrompts.js';
+import { extractCommitTitle, extractCommitSuggestion } from '../core/genCommit.js';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+test('buildPrompt requests title plus description format', () => {
+    const prompt = buildPrompt('diff --git a/a.js b/a.js');
 
-async function main() {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+    assert.match(prompt, /Generate exactly ONE commit title and ONE short description\./);
+    assert.match(prompt, /Description:/i);
+});
 
-    const testDiff = `
-        diff --git a/src/utils/helpers.js b/src/utils/helpers.js
-        index 23a4b17..d9f5b21 100644
-        --- a/src/utils/helpers.js
-        +++ b/src/utils/helpers.js
-        @@ -10,7 +10,12 @@ export function formatDate(date) {
-        const d = new Date(date);
-        -  return d.toLocaleDateString();
-        +  return d.toLocaleString('en-IN', {
-        +    day: '2-digit',
-        +    month: 'short',
-        +    year: 'numeric',
-        +    hour: '2-digit',
-        +    minute: '2-digit'
-        +  });
-        }
-        `;
+test('extractCommitTitle returns conventional commit line from mixed response', () => {
+    const raw = `fix: handle empty config file gracefully\nDescription: Prevents crash when config is malformed.`;
 
-    try {
+    const title = extractCommitTitle(raw);
 
-        const diffToAnalyze = testDiff;
+    assert.equal(title, 'fix: handle empty config file gracefully');
+});
 
-        const promptText = prompt.replace('${diff}', diffToAnalyze);
-        const result = await model.generateContent(promptText);
-        console.log(result.response.text());
-    } catch (error) {
-        console.error('Error:', error.message);
-        const promptText = prompt.replace('${diff}', testDiff);
-        const result = await model.generateContent(promptText);
-        console.log('Using test diff:', result.response.text());
-    }
-}
+test('extractCommitSuggestion returns title and description', () => {
+    const raw = `feat: add --context flag for guided commit generation\nDescription: Lets users guide commit tone.`;
 
-main().catch(console.error);
+    const suggestion = extractCommitSuggestion(raw);
+
+    assert.equal(suggestion.title, 'feat: add --context flag for guided commit generation');
+    assert.equal(suggestion.description, 'Lets users guide commit tone.');
+});
+
+test('extractCommitSuggestion falls back to default description when missing', () => {
+    const raw = `chore: tidy internal imports`;
+
+    const suggestion = extractCommitSuggestion(raw);
+
+    assert.equal(suggestion.title, 'chore: tidy internal imports');
+    assert.equal(suggestion.description, 'No additional description provided by AI.');
+});
+
+test('extractCommitTitle throws for empty responses', () => {
+    assert.throws(() => extractCommitTitle('   '), /empty commit message/i);
+});

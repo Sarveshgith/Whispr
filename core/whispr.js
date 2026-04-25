@@ -1,4 +1,4 @@
-import { generateCommitMessage } from '../core/genCommit.js';
+import { generateCommitSuggestion } from '../core/genCommit.js';
 import { getGitStatus } from '../subsidiary/gitCheck.js';
 import { initGitRepo, stageAllFiles, stageInteractive, getDiffStats } from '../subsidiary/gitActions.js';
 import { promptUser, promptChoice, promptInput } from '../utils/interactive.js';
@@ -8,8 +8,13 @@ import boxen from 'boxen';
 import ora from 'ora';
 import { execSync } from 'child_process';
 
-function displayCommitMessage(message, stats = null) {
+function displayCommitMessage(message, description = '', stats = null) {
     let content = chalk.bold.white(message);
+
+    if (description && description.trim()) {
+        content += '\n\n' + chalk.dim('Description (reference only):') + '\n';
+        content += chalk.dim(description.trim());
+    }
 
     if (stats && stats.total > 0) {
         content += '\n\n' + chalk.dim('─'.repeat(50)) + '\n';
@@ -152,10 +157,13 @@ export async function runWhisprFlow(options = {}) {
 
     let spinner = ora('🤖 Generating commit message...').start();
     let message;
+    let description = '';
     let additionalContext = '';
 
     try {
-        message = await generateCommitMessage({ staged: true, additionalContext });
+        const suggestion = await generateCommitSuggestion({ staged: true, additionalContext });
+        message = suggestion.title;
+        description = suggestion.description;
         spinner.succeed(chalk.green('✓ Commit message generated'));
     } catch (error) {
         spinner.fail(chalk.red('✗ Failed to generate commit message'));
@@ -165,7 +173,7 @@ export async function runWhisprFlow(options = {}) {
 
     let confirmed = false;
     while (!confirmed) {
-        displayCommitMessage(message, diffStats);
+        displayCommitMessage(message, description, diffStats);
 
         console.log(chalk.dim('\nOptions:'));
         console.log(chalk.green('[y]') + ' Commit  ' +
@@ -206,7 +214,9 @@ export async function runWhisprFlow(options = {}) {
         } else if (action === 1) {
             spinner = ora('🔄 Regenerating commit message...').start();
             try {
-                message = await generateCommitMessage({ staged: true, additionalContext });
+                const suggestion = await generateCommitSuggestion({ staged: true, additionalContext });
+                message = suggestion.title;
+                description = suggestion.description;
                 spinner.succeed(chalk.green('✓ Commit message regenerated'));
             } catch (error) {
                 spinner.fail(chalk.red('✗ Failed to regenerate'));
@@ -221,10 +231,12 @@ export async function runWhisprFlow(options = {}) {
 
             spinner = ora('🔄 Regenerating with context...').start();
             try {
-                message = await generateCommitMessage({
+                const suggestion = await generateCommitSuggestion({
                     staged: true,
                     additionalContext
                 });
+                message = suggestion.title;
+                description = suggestion.description;
                 spinner.succeed(chalk.green('✓ Commit message regenerated'));
             } catch (error) {
                 spinner.fail(chalk.red('✗ Failed to regenerate'));
